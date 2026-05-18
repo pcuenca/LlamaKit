@@ -9,11 +9,9 @@ import LlamaSwift
 public final class LlamaModel: @unchecked Sendable {
     /// Parameters that control how a model file is loaded.
     public struct Parameters: Sendable {
-        /// Number of transformer layers to offload to the GPU backend
-        /// (Metal on Apple platforms).
+        /// Number of transformer layers to offload to Metal.
         ///
-        /// `-1` offloads all layers, which is the right default on Apple
-        /// Silicon. Set to `0` to run on CPU only.
+        /// `-1` (default) offloads all layers. Set to `0` to run on CPU.
         public var gpuLayerCount: Int32
 
         /// Memory-map the model file instead of copying it into RAM.

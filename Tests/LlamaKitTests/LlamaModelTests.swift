@@ -15,20 +15,11 @@ struct LlamaModelTests {
 
     #if Hub
         /// Downloads a tiny GGUF and verifies the model's reported metadata.
-        ///
-        /// Requires network and the `Hub` trait. Skipped in CI unless
-        /// `LLAMAKIT_NETWORK_TESTS=1` is set, since the first run pulls
-        /// ~80 MB.
-        @Test(
-            .enabled(
-                if: ProcessInfo.processInfo.environment["LLAMAKIT_NETWORK_TESTS"] == "1",
-                "set LLAMAKIT_NETWORK_TESTS=1 to enable Hub-backed tests"
-            )
-        )
+        @Test
         func loadsSmolLM2FromHub() async throws {
             let model = try await LlamaModel.from(
                 repo: "unsloth/SmolLM2-135M-Instruct-GGUF",
-                filename: "*Q4_K_M.gguf"
+                filename: "*Q2_K.gguf"
             )
 
             #expect(model.parameterCount > 0)
