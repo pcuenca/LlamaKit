@@ -23,12 +23,20 @@ struct LlamaModelTests {
             )
 
             #expect(model.parameterCount > 0)
-            #expect(model.vocabularySize > 0)
             #expect(model.trainingContextLength > 0)
             #expect(model.embeddingDimension > 0)
             #expect(model.layerCount > 0)
             #expect(model.hasDecoder)
-            #expect(model.chatTemplate != nil)
+
+            let tokenizer = model.tokenizer
+            #expect(tokenizer.size > 0)
+            #expect(tokenizer.chatTemplate != nil)
+            #expect(tokenizer.bosToken != nil)
+            #expect(tokenizer.eosToken != nil)
+
+            let context = try LlamaContext(model: model)
+            #expect(context.contextLength > 0)
+            #expect(context.batchSize > 0)
         }
     #endif
 }

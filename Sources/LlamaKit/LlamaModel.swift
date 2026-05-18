@@ -122,11 +122,6 @@ extension LlamaModel {
         llama_model_n_head(pointer)
     }
 
-    /// The number of tokens in the model's vocabulary.
-    public var vocabularySize: Int32 {
-        llama_vocab_n_tokens(vocabPointer)
-    }
-
     /// Whether the model has an encoder component (e.g. encoder-decoder
     /// architectures like T5).
     public var hasEncoder: Bool {
@@ -137,15 +132,6 @@ extension LlamaModel {
     /// `true`; encoder-only models (e.g. BERT) return `false`.
     public var hasDecoder: Bool {
         llama_model_has_decoder(pointer)
-    }
-
-    /// The chat template embedded in the GGUF file, if any. Returns `nil`
-    /// when the file has no `tokenizer.chat_template` metadata.
-    public var chatTemplate: String? {
-        guard let cString = llama_model_chat_template(pointer, nil) else {
-            return nil
-        }
-        return String(cString: cString)
     }
 
     /// A human-readable description like "llama 7B Q4_K - Medium".
@@ -167,5 +153,74 @@ extension LlamaModel {
     /// The on-disk size of the model in bytes.
     public var fileSize: UInt64 {
         llama_model_size(pointer)
+    }
+}
+
+// MARK: - Tokenizer
+
+extension LlamaModel {
+    /// The model's tokenizer namespace, mirroring GGUF's `tokenizer.*` keys
+    /// and Hugging Face's `tokenizer` convention.
+    public var tokenizer: Tokenizer { Tokenizer(model: self) }
+
+    /// A view over the model's vocabulary and tokenizer-level metadata.
+    ///
+    /// `Tokenizer` borrows from `LlamaModel` and holds a strong reference
+    /// to keep the underlying pointers alive.
+    public struct Tokenizer: Sendable {
+        private let model: LlamaModel
+
+        var vocab: OpaquePointer { model.vocabPointer }
+        var modelPointer: OpaquePointer { model.pointer }
+
+        init(model: LlamaModel) {
+            self.model = model
+        }
+
+        /// The number of tokens in the vocabulary.
+        public var size: Int32 {
+            llama_vocab_n_tokens(vocab)
+        }
+
+        /// The chat template embedded in the GGUF file, if any.
+        ///
+        /// Returns `nil` when the file has no `tokenizer.chat_template`
+        /// metadata. llama.cpp stores this at the model level but GGUF
+        /// keeps it under `tokenizer.` on disk.
+        public var chatTemplate: String? {
+            guard let cString = llama_model_chat_template(modelPointer, nil) else {
+                return nil
+            }
+            return String(cString: cString)
+        }
+
+        /// The beginning-of-sequence token, or `nil` if the model has none.
+        public var bosToken: llama_token? {
+            normalize(llama_vocab_bos(vocab))
+        }
+
+        /// The end-of-sequence token, or `nil` if the model has none.
+        public var eosToken: llama_token? {
+            normalize(llama_vocab_eos(vocab))
+        }
+
+        /// The end-of-turn token, or `nil` if the model has none.
+        public var endOfTurnToken: llama_token? {
+            normalize(llama_vocab_eot(vocab))
+        }
+
+        /// The sentence-separator token, or `nil` if the model has none.
+        public var separatorToken: llama_token? {
+            normalize(llama_vocab_sep(vocab))
+        }
+
+        /// The padding token, or `nil` if the model has none.
+        public var paddingToken: llama_token? {
+            normalize(llama_vocab_pad(vocab))
+        }
+
+        private func normalize(_ token: llama_token) -> llama_token? {
+            token == LLAMA_TOKEN_NULL ? nil : token
+        }
     }
 }
