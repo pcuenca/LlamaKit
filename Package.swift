@@ -21,7 +21,7 @@ let package = Package(
             name: "Hub",
             description: "Enables LlamaModel.from(repo:filename:) via huggingface/swift-transformers."
         ),
-        .default(enabledTraits: []),
+        .default(enabledTraits: ["Hub"]),
     ],
     dependencies: [
         .package(path: "../llama.swift"),
