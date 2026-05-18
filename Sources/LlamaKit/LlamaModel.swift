@@ -1,5 +1,5 @@
 import Foundation
-@preconcurrency import LlamaSwift
+import LlamaSwift
 
 /// A loaded GGUF model.
 ///
