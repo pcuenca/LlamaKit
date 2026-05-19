@@ -178,7 +178,7 @@ extension LlamaModel {
         }
 
         /// The number of tokens in the vocabulary.
-        public var size: Int32 {
+        public var vocabSize: Int32 {
             llama_vocab_n_tokens(vocab)
         }
 
@@ -217,6 +217,12 @@ extension LlamaModel {
         /// The padding token, or `nil` if the model has none.
         public var paddingToken: llama_token? {
             normalize(llama_vocab_pad(vocab))
+        }
+
+        /// Whether `token` is an end-of-generation token (EOS, EOT, or any
+        /// model-specific generation terminator).
+        public func isEndOfGeneration(_ token: llama_token) -> Bool {
+            llama_vocab_is_eog(vocab, token)
         }
 
         private func normalize(_ token: llama_token) -> llama_token? {

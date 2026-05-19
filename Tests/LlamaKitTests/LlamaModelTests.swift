@@ -29,10 +29,13 @@ struct LlamaModelTests {
             #expect(model.hasDecoder)
 
             let tokenizer = model.tokenizer
-            #expect(tokenizer.size > 0)
+            #expect(tokenizer.vocabSize > 0)
             #expect(tokenizer.chatTemplate != nil)
             #expect(tokenizer.bosToken != nil)
             #expect(tokenizer.eosToken != nil)
+            if let eos = tokenizer.eosToken {
+                #expect(tokenizer.isEndOfGeneration(eos))
+            }
 
             let context = try LlamaContext(model: model)
             #expect(context.contextLength > 0)
