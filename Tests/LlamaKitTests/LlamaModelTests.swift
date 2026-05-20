@@ -46,7 +46,8 @@ struct LlamaModelTests {
         func encodesAndDecodesText() async throws {
             let model = try await LlamaModel.from(
                 repo: "unsloth/SmolLM2-135M-Instruct-GGUF",
-                filename: "*Q2_K.gguf"
+                filename: "*Q2_K.gguf",
+                parameters: .init(vocabularyOnly: true)
             )
             let tokenizer = model.tokenizer
 
@@ -83,7 +84,8 @@ struct LlamaModelTests {
         func appliesChatTemplate() async throws {
             let model = try await LlamaModel.from(
                 repo: "unsloth/SmolLM2-135M-Instruct-GGUF",
-                filename: "*Q2_K.gguf"
+                filename: "*Q2_K.gguf",
+                parameters: .init(vocabularyOnly: true)
             )
             let tokenizer = model.tokenizer
 
