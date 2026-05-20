@@ -5,17 +5,6 @@ Swift wrapper around [llama.cpp](https://github.com/ggml-org/llama.cpp), built o
 Provides idiomatic Swift types for loading GGUF models, tokenizing, applying
 chat templates, sampling, and streaming generation.
 
-## Requirements
-
-- Swift 6.1+
-- macOS 13+ / iOS 16+ / visionOS 1+
-
-## Installation
-
-```swift
-.package(url: "https://github.com/pcuenca/LlamaKit", from: "0.1.0")
-```
-
 ## Load a model from the Hugging Face Hub
 
 ```swift
@@ -79,3 +68,13 @@ supported.
 swift run kitchat --hf Qwen/Qwen2.5-0.5B-Instruct-GGUF
 ```
 
+## Installation
+
+```swift
+.package(url: "https://github.com/pcuenca/LlamaKit", from: "0.1.0")
+```
+
+## Requirements
+
+- Swift 6.1+
+- macOS 13+ / iOS 16+ / visionOS 1+
