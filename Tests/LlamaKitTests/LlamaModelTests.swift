@@ -37,9 +37,9 @@ struct LlamaModelTests {
                 #expect(tokenizer.isEndOfGeneration(eos))
             }
 
-            let context = try LlamaContext(model: model)
-            #expect(context.contextLength > 0)
-            #expect(context.batchSize > 0)
+            let session = try LlamaSession(model: model)
+            #expect(session.contextLength > 0)
+            #expect(session.batchSize > 0)
         }
 
         @Test
@@ -50,8 +50,7 @@ struct LlamaModelTests {
             )
             let tokenizer = model.tokenizer
 
-            // Round-trip without special tokens — plain text should decode
-            // back to itself.
+            // Round-trip without special tokens
             let original = "Hello, world!"
             let tokens = try tokenizer.encode(original, addSpecial: false)
             #expect(!tokens.isEmpty)
@@ -74,7 +73,8 @@ struct LlamaModelTests {
                 #expect(withSpecial.first == bos)
             }
 
-            // tokenToText on each piece concatenated should match decode().
+            // tokenToText on each piece concatenated should match decode()
+            // (ignoring unicode for now; should work for complete sequences)
             let pieces = tokens.map { tokenizer.tokenToText($0) }.joined()
             #expect(pieces == original)
         }
@@ -92,9 +92,6 @@ struct LlamaModelTests {
                 .user("Hello"),
             ])
 
-            // SmolLM2 uses ChatML. The rendered prompt should reference both
-            // messages and end with the assistant turn marker so generation
-            // can pick up.
             #expect(prompt.contains("You are a helpful assistant."))
             #expect(prompt.contains("Hello"))
             #expect(prompt.contains("<|im_start|>"))

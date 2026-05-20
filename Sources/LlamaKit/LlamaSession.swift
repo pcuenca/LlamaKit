@@ -1,21 +1,28 @@
 import Foundation
 import LlamaSwift
 
-/// A stateful inference context bound to a `LlamaModel`.
+/// A stateful inference session bound to a `LlamaModel`.
 ///
-/// A context owns the KV cache and is the unit of mutable state for
-/// generation. llama.cpp requires that calls into a single context be
-/// serialized, so `LlamaContext` is an `actor` — multiple contexts can
-/// share one `LlamaModel` and run in parallel.
-public actor LlamaContext {
-    /// Parameters that control how a context is initialized.
+/// A session owns the KV cache — the running record of every token the
+/// model has processed. Each generation step extends that state, so a
+/// single session represents one ongoing stream of work: a conversation,
+/// an embedding batch, or an evaluation pass.
+///
+/// llama.cpp serializes calls into the underlying `llama_context`, so
+/// `LlamaSession` is an `actor`. To run inference in parallel, create
+/// multiple sessions from the same `LlamaModel` — they share weights but
+/// each holds its own KV cache.
+///
+/// Wraps llama.cpp's `llama_context`.
+public actor LlamaSession {
+    /// Parameters that control how a session is initialized.
     public struct Parameters: Sendable {
-        /// Text context size.
+        /// Maximum sequence length the session can hold, in tokens.
         ///
         /// `0` (default) uses the model's training context length.
         public var contextLength: UInt32
 
-        /// Logical maximum batch size submitted to `llama_decode`.
+        /// Logical maximum batch size submitted in one step.
         public var batchSize: UInt32
 
         /// Physical maximum batch size.
@@ -27,7 +34,7 @@ public actor LlamaContext {
         /// Threads used for prompt and batch processing.
         public var batchThreadCount: Int32
 
-        /// Whether the context is used for embeddings rather than generation.
+        /// Whether the session computes embeddings rather than generating text.
         public var embeddingMode: Bool
 
         public init(
@@ -61,13 +68,13 @@ public actor LlamaContext {
     }
 
     public enum InitError: Error, CustomStringConvertible {
-        case contextInitFailed
+        case initFailed
         case encoderOnlyModel
 
         public var description: String {
             switch self {
-            case .contextInitFailed:
-                return "llama.cpp failed to initialize a context from the model"
+            case .initFailed:
+                return "llama.cpp failed to initialize a session from the model"
             case .encoderOnlyModel:
                 return "Model is encoder-only and cannot be used for generation"
             }
@@ -76,12 +83,10 @@ public actor LlamaContext {
 
     nonisolated(unsafe) let pointer: OpaquePointer
 
-    /// The model this context is bound to. Holding a strong reference keeps
-    /// the underlying `llama_model` alive for at least the lifetime of the
-    /// context.
+    /// The model this session is bound to. We hold a strong reference to keep it alive.
     public nonisolated let model: LlamaModel
 
-    /// The parameters used to initialize this context.
+    /// The parameters used to initialize this session.
     public nonisolated let parameters: Parameters
 
     /// The active context length, as resolved by llama.cpp at init.
@@ -96,14 +101,14 @@ public actor LlamaContext {
     /// The active physical batch size.
     public nonisolated let physicalBatchSize: UInt32
 
-    /// Creates a context for the given model.
+    /// Creates a session for the given model.
     public init(model: LlamaModel, parameters: Parameters = .default) throws {
         let cParams = parameters.toC()
         guard let pointer = llama_init_from_model(model.pointer, cParams) else {
-            throw InitError.contextInitFailed
+            throw InitError.initFailed
         }
 
-        // Generation requires a KV cache. Embedding-only contexts and
+        // Generation requires a KV cache. Embedding-only sessions and
         // encoder-only models won't have one.
         if !parameters.embeddingMode, llama_get_memory(pointer) == nil {
             llama_free(pointer)

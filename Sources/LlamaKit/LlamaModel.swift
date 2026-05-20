@@ -5,7 +5,7 @@ import LlamaSwift
 ///
 /// `LlamaModel` owns the underlying `llama_model` pointer and frees it on
 /// deinit. The model is immutable after loading and safe to share across
-/// threads; mutable inference state lives in a separate context type.
+/// threads; mutable inference state lives in a separate type (LlamaSession).
 public final class LlamaModel: @unchecked Sendable {
     /// Parameters that control how a model file is loaded.
     public struct Parameters: Sendable {
