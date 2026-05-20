@@ -24,8 +24,8 @@ let package = Package(
         .default(enabledTraits: ["Hub"]),
     ],
     dependencies: [
-        .package(path: "../llama.swift"),
-        .package(path: "../swift-transformers"),
+        .package(url: "https://github.com/mattt/llama.swift", .upToNextMajor(from: "2.9190.0")),
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.3"),
     ],
     targets: [
         .target(
