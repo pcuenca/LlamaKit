@@ -225,6 +225,234 @@ extension LlamaModel {
             llama_vocab_is_eog(vocab, token)
         }
 
+        // MARK: - Encode / Decode
+
+        public enum EncodingError: Error, CustomStringConvertible {
+            case overflow
+
+            public var description: String {
+                switch self {
+                case .overflow:
+                    return "Tokenization result would exceed Int32.max tokens"
+                }
+            }
+        }
+
+        /// Tokenize `text` into a sequence of token ids.
+        ///
+        /// - Parameters:
+        ///   - text: The input to tokenize.
+        ///   - addSpecial: When `true`, allow the tokenizer to add BOS/EOS
+        ///     tokens if the model is configured to do so. Default `true`;
+        ///     pass `false` when tokenizing fragments that will be concatenated.
+        ///   - parseSpecial: When `true`, parse special tokens like
+        ///     `<|im_start|>` as themselves rather than as plain text.
+        ///     Default `true` — what you want for prompt building.
+        public func encode(
+            _ text: String,
+            addSpecial: Bool = true,
+            parseSpecial: Bool = true
+        ) throws -> [llama_token] {
+            if text.isEmpty { return [] }
+
+            let utf8Count = Int32(text.utf8.count)
+            var capacity = max(utf8Count + 4, 16)
+            var buffer = [llama_token](repeating: 0, count: Int(capacity))
+
+            var written = buffer.withUnsafeMutableBufferPointer { ptr in
+                llama_tokenize(
+                    vocab, text, utf8Count,
+                    ptr.baseAddress, capacity,
+                    addSpecial, parseSpecial
+                )
+            }
+
+            if written < 0 {
+                if written == Int32.min { throw EncodingError.overflow }
+                capacity = -written
+                buffer = [llama_token](repeating: 0, count: Int(capacity))
+                written = buffer.withUnsafeMutableBufferPointer { ptr in
+                    llama_tokenize(
+                        vocab, text, utf8Count,
+                        ptr.baseAddress, capacity,
+                        addSpecial, parseSpecial
+                    )
+                }
+            }
+
+            guard written >= 0 else { throw EncodingError.overflow }
+            return Array(buffer.prefix(Int(written)))
+        }
+
+        /// Detokenize a sequence of tokens back into text.
+        ///
+        /// - Parameters:
+        ///   - tokens: The tokens to render.
+        ///   - removeSpecial: When `true`, strip BOS/EOS tokens from the output.
+        ///   - renderSpecial: When `true`, render special tokens (e.g.
+        ///     `<|im_start|>`) as literal text. Default `false` — what you
+        ///     want for user-visible output.
+        public func decode(
+            _ tokens: [llama_token],
+            removeSpecial: Bool = false,
+            renderSpecial: Bool = false
+        ) -> String {
+            if tokens.isEmpty { return "" }
+
+            var capacity = Int32(max(tokens.count * 8, 32))
+            var buffer = [CChar](repeating: 0, count: Int(capacity))
+
+            var written = tokens.withUnsafeBufferPointer { tokensPtr in
+                buffer.withUnsafeMutableBufferPointer { bufPtr in
+                    llama_detokenize(
+                        vocab,
+                        tokensPtr.baseAddress,
+                        Int32(tokens.count),
+                        bufPtr.baseAddress,
+                        capacity,
+                        removeSpecial,
+                        renderSpecial
+                    )
+                }
+            }
+
+            if written < 0 {
+                capacity = -written
+                buffer = [CChar](repeating: 0, count: Int(capacity))
+                written = tokens.withUnsafeBufferPointer { tokensPtr in
+                    buffer.withUnsafeMutableBufferPointer { bufPtr in
+                        llama_detokenize(
+                            vocab,
+                            tokensPtr.baseAddress,
+                            Int32(tokens.count),
+                            bufPtr.baseAddress,
+                            capacity,
+                            removeSpecial,
+                            renderSpecial
+                        )
+                    }
+                }
+            }
+
+            guard written > 0 else { return "" }
+            return buffer.withUnsafeBytes { raw in
+                let bytes = raw.bindMemory(to: UInt8.self).prefix(Int(written))
+                return String(decoding: bytes, as: UTF8.self)
+            }
+        }
+
+        // MARK: - Chat Templates
+
+        public enum ChatTemplateError: Error, CustomStringConvertible {
+            case noTemplate
+            case applyFailed
+
+            public var description: String {
+                switch self {
+                case .noTemplate:
+                    return "Model has no embedded chat template and no override was provided"
+                case .applyFailed:
+                    return "llama.cpp failed to apply the chat template"
+                }
+            }
+        }
+
+        /// Render a chat into a prompt string using the model's embedded
+        /// chat template.
+        ///
+        /// - Parameters:
+        ///   - messages: The conversation, in order.
+        ///   - addGenerationPrompt: When `true` (default), the rendered
+        ///     output ends with the tokens that mark the start of an
+        ///     assistant turn — ready for generation.
+        ///   - template: Optional template override. Defaults to the
+        ///     template embedded in the GGUF.
+        ///
+        /// - Note: llama.cpp does *not* run the stored template as Jinja.
+        ///   It uses a built-in list of formatters indexed by template. The list may
+        ///   be incomplete; llama.cpp may fall back to ChatML or fail.
+        public func applyChatTemplate(
+            _ messages: [ChatMessage],
+            addGenerationPrompt: Bool = true,
+            template: String? = nil
+        ) throws -> String {
+            guard let resolvedTemplate = template ?? chatTemplate else {
+                throw ChatTemplateError.noTemplate
+            }
+
+            // Keep C strings alive for the duration of the call.
+            let cRoles: [UnsafeMutablePointer<CChar>?] = messages.map { strdup($0.role) }
+            let cContents: [UnsafeMutablePointer<CChar>?] = messages.map { strdup($0.content) }
+            defer {
+                for ptr in cRoles { free(ptr) }
+                for ptr in cContents { free(ptr) }
+            }
+
+            let cMessages: [llama_chat_message] = zip(cRoles, cContents).map { role, content in
+                llama_chat_message(role: role, content: content)
+            }
+
+            let requiredSize: Int32 = resolvedTemplate.withCString { tmpl in
+                llama_chat_apply_template(
+                    tmpl, cMessages, cMessages.count,
+                    addGenerationPrompt, nil, 0
+                )
+            }
+            guard requiredSize > 0 else { throw ChatTemplateError.applyFailed }
+
+            var buffer = [CChar](repeating: 0, count: Int(requiredSize) + 1)
+            let written: Int32 = resolvedTemplate.withCString { tmpl in
+                buffer.withUnsafeMutableBufferPointer { ptr in
+                    llama_chat_apply_template(
+                        tmpl, cMessages, cMessages.count,
+                        addGenerationPrompt, ptr.baseAddress, Int32(ptr.count)
+                    )
+                }
+            }
+            guard written > 0 else { throw ChatTemplateError.applyFailed }
+
+            return buffer.withUnsafeBytes { raw in
+                let bytes = raw.bindMemory(to: UInt8.self).prefix(Int(written))
+                return String(decoding: bytes, as: UTF8.self)
+            }
+        }
+
+        /// Render a single token as text. Intended for streaming generation
+        /// loops where one token is appended at a time.
+        public func tokenToText(
+            _ token: llama_token,
+            renderSpecial: Bool = false
+        ) -> String {
+            var capacity: Int32 = 64
+            var buffer = [CChar](repeating: 0, count: Int(capacity))
+
+            var written = buffer.withUnsafeMutableBufferPointer { ptr in
+                llama_token_to_piece(
+                    vocab, token,
+                    ptr.baseAddress, capacity,
+                    0, renderSpecial
+                )
+            }
+
+            if written < 0 {
+                capacity = -written
+                buffer = [CChar](repeating: 0, count: Int(capacity))
+                written = buffer.withUnsafeMutableBufferPointer { ptr in
+                    llama_token_to_piece(
+                        vocab, token,
+                        ptr.baseAddress, capacity,
+                        0, renderSpecial
+                    )
+                }
+            }
+
+            guard written > 0 else { return "" }
+            return buffer.withUnsafeBytes { raw in
+                let bytes = raw.bindMemory(to: UInt8.self).prefix(Int(written))
+                return String(decoding: bytes, as: UTF8.self)
+            }
+        }
+
         private func normalize(_ token: llama_token) -> llama_token? {
             token == LLAMA_TOKEN_NULL ? nil : token
         }
