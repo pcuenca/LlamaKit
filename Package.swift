@@ -19,13 +19,13 @@ let package = Package(
     traits: [
         .trait(
             name: "Hub",
-            description: "Enables LlamaModel.from(repo:filename:) via huggingface/swift-transformers."
+            description: "Enables LlamaModel.from(repo:filename:) via huggingface/swift-huggingface."
         ),
         .default(enabledTraits: ["Hub"]),
     ],
     dependencies: [
         .package(url: "https://github.com/mattt/llama.swift", .upToNextMajor(from: "2.9190.0")),
-        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.3"),
+        .package(url: "https://github.com/huggingface/swift-huggingface", from: "0.8.1"),
     ],
     targets: [
         .target(
@@ -33,8 +33,8 @@ let package = Package(
             dependencies: [
                 .product(name: "LlamaSwift", package: "llama.swift"),
                 .product(
-                    name: "Hub",
-                    package: "swift-transformers",
+                    name: "HuggingFace",
+                    package: "swift-huggingface",
                     condition: .when(traits: ["Hub"])
                 ),
             ]
@@ -44,8 +44,8 @@ let package = Package(
             dependencies: [
                 "LlamaKit",
                 .product(
-                    name: "Hub",
-                    package: "swift-transformers",
+                    name: "HuggingFace",
+                    package: "swift-huggingface",
                     condition: .when(traits: ["Hub"])
                 ),
             ]
