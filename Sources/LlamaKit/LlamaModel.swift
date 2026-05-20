@@ -443,10 +443,23 @@ extension LlamaModel {
 
         /// Render a single token as text. Intended for streaming generation
         /// loops where one token is appended at a time.
+        ///
+        /// May return a lossy result for tokens that span a multi-byte UTF-8
+        /// sequence. For correct streaming, accumulate raw bytes via
+        /// `tokenBytes(_:)` and decode at codepoint boundaries.
         public func tokenToText(
             _ token: llama_token,
             renderSpecial: Bool = false
         ) -> String {
+            let bytes = tokenBytes(token, renderSpecial: renderSpecial)
+            return String(decoding: bytes, as: UTF8.self)
+        }
+
+        /// Render a single token as its raw UTF-8 bytes.
+        func tokenBytes(
+            _ token: llama_token,
+            renderSpecial: Bool = false
+        ) -> [UInt8] {
             var capacity: Int32 = 64
             var buffer = [CChar](repeating: 0, count: Int(capacity))
 
@@ -470,10 +483,9 @@ extension LlamaModel {
                 }
             }
 
-            guard written > 0 else { return "" }
+            guard written > 0 else { return [] }
             return buffer.withUnsafeBytes { raw in
-                let bytes = raw.bindMemory(to: UInt8.self).prefix(Int(written))
-                return String(decoding: bytes, as: UTF8.self)
+                Array(raw.bindMemory(to: UInt8.self).prefix(Int(written)))
             }
         }
 
