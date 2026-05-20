@@ -107,6 +107,18 @@ struct LlamaModelTests {
                 addGenerationPrompt: true
             )
             #expect(open.count > closed.count)
+
+            // Dict-shaped overload should render identically to the typed one,
+            // and reject malformed entries.
+            let viaDicts = try tokenizer.applyChatTemplate([
+                ["role": "system", "content": "You are a helpful assistant."],
+                ["role": "user", "content": "Hello"],
+            ])
+            #expect(viaDicts == prompt)
+
+            #expect(throws: LlamaModel.Tokenizer.ChatTemplateError.self) {
+                _ = try tokenizer.applyChatTemplate([["role": "user"]])
+            }
         }
     #endif
 }

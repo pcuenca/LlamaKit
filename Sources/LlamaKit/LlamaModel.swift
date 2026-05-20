@@ -346,6 +346,7 @@ extension LlamaModel {
         public enum ChatTemplateError: Error, CustomStringConvertible {
             case noTemplate
             case applyFailed
+            case malformedMessage
 
             public var description: String {
                 switch self {
@@ -353,6 +354,8 @@ extension LlamaModel {
                     return "Model has no embedded chat template and no override was provided"
                 case .applyFailed:
                     return "llama.cpp failed to apply the chat template"
+                case .malformedMessage:
+                    return "A message dictionary is missing the 'role' or 'content' key"
                 }
             }
         }
@@ -415,6 +418,27 @@ extension LlamaModel {
                 let bytes = raw.bindMemory(to: UInt8.self).prefix(Int(written))
                 return String(decoding: bytes, as: UTF8.self)
             }
+        }
+
+        /// Render a chat into a prompt string from dictionary-shaped messages.
+        ///
+        /// Convenience overload for interop with Python-style message arrays.
+        public func applyChatTemplate(
+            _ messages: [[String: String]],
+            addGenerationPrompt: Bool = true,
+            template: String? = nil
+        ) throws -> String {
+            let typed: [ChatMessage] = try messages.map { dict in
+                guard let role = dict["role"], let content = dict["content"] else {
+                    throw ChatTemplateError.malformedMessage
+                }
+                return ChatMessage(role: role, content: content)
+            }
+            return try applyChatTemplate(
+                typed,
+                addGenerationPrompt: addGenerationPrompt,
+                template: template
+            )
         }
 
         /// Render a single token as text. Intended for streaming generation
