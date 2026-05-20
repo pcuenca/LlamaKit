@@ -62,7 +62,7 @@ supported.
 
 ## Example: `kitchat`
 
-`Examples/Chat/` contains a small interactive chat CLI built on LlamaKit:
+`Examples/Chat/` contains a [small interactive chat CLI](https://github.com/pcuenca/LlamaKit/blob/main/Examples/Chat/Sources/kitchat/ChatCommand.swift) built on LlamaKit:
 
 ```bash
 swift run kitchat --hf Qwen/Qwen2.5-0.5B-Instruct-GGUF
