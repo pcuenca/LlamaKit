@@ -55,14 +55,15 @@
             pattern: String,
             repo: String
         ) throws -> URL {
+            let glob = NSPredicate(format: "self LIKE %@", pattern)
             let enumerator = FileManager.default.enumerator(
                 at: snapshot,
                 includingPropertiesForKeys: [.isRegularFileKey]
             )
             while let url = enumerator?.nextObject() as? URL {
-                if url.pathExtension.lowercased() == "gguf" {
-                    return url
-                }
+                guard url.pathExtension.lowercased() == "gguf" else { continue }
+                guard glob.evaluate(with: url.lastPathComponent) else { continue }
+                return url
             }
             throw HubError.noMatchingFile(repo: repo, pattern: pattern)
         }
