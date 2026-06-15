@@ -24,12 +24,14 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/mattt/llama.swift", .upToNextMajor(from: "2.9190.0")),
         .package(url: "https://github.com/huggingface/swift-huggingface", from: "0.8.1"),
+        .package(url: "https://github.com/huggingface/swift-jinja", from: "2.3.6"),
     ],
     targets: [
         .target(
             name: "LlamaKit",
             dependencies: [
                 .product(name: "LlamaSwift", package: "llama.swift"),
+                .product(name: "Jinja", package: "swift-jinja"),
                 .product(
                     name: "HuggingFace",
                     package: "swift-huggingface",

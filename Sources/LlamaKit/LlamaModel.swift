@@ -1,4 +1,5 @@
 import Foundation
+import Jinja
 import LlamaSwift
 
 /// A loaded GGUF model.
@@ -401,7 +402,16 @@ extension LlamaModel {
                     addGenerationPrompt, nil, 0
                 )
             }
-            guard requiredSize > 0 else { throw ChatTemplateError.applyFailed }
+
+            // Use Jinja when the hardcoded template detection fails.
+            // llama.cpp uses `common/jinja`, not bundled with the XCFramework.
+            if requiredSize <= 0 {
+                return try renderJinjaTemplate(
+                    resolvedTemplate,
+                    messages: messages,
+                    addGenerationPrompt: addGenerationPrompt
+                )
+            }
 
             var buffer = [CChar](repeating: 0, count: Int(requiredSize) + 1)
             let written: Int32 = resolvedTemplate.withCString { tmpl in
@@ -417,6 +427,34 @@ extension LlamaModel {
             return buffer.withUnsafeBytes { raw in
                 let bytes = raw.bindMemory(to: UInt8.self).prefix(Int(written))
                 return String(decoding: bytes, as: UTF8.self)
+            }
+        }
+
+        private func renderJinjaTemplate(
+            _ template: String,
+            messages: [ChatMessage],
+            addGenerationPrompt: Bool
+        ) throws -> String {
+            var context: [String: Jinja.Value] = [
+                "messages": .array(messages.map { msg in
+                    var dict = OrderedDictionary<String, Jinja.Value>()
+                    dict["role"] = .string(msg.role)
+                    dict["content"] = .string(msg.content)
+                    return .object(dict)
+                }),
+                "add_generation_prompt": .boolean(addGenerationPrompt),
+            ]
+            if let bos = bosToken {
+                context["bos_token"] = .string(tokenToText(bos, renderSpecial: true))
+            }
+            if let eos = eosToken {
+                context["eos_token"] = .string(tokenToText(eos, renderSpecial: true))
+            }
+            do {
+                // TODO: compiled template cache
+                return try Jinja.Template(template).render(context)
+            } catch {
+                throw ChatTemplateError.applyFailed
             }
         }
 
