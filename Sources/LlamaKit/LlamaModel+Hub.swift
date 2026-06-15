@@ -6,6 +6,7 @@
         public enum HubError: Error, CustomStringConvertible {
             case invalidRepo(String)
             case noMatchingFile(repo: String, pattern: String)
+            case repoNotFound(repo: String)
 
             public var description: String {
                 switch self {
@@ -13,6 +14,8 @@
                     return "Invalid Hub repo identifier '\(repo)' — expected 'namespace/name'"
                 case .noMatchingFile(let repo, let pattern):
                     return "No file matching \(pattern) in \(repo)"
+                case .repoNotFound(let repo):
+                    return "Hugging Face repo '\(repo)' not found"
                 }
             }
         }
@@ -40,12 +43,22 @@
             guard let repoID = Repo.ID(rawValue: repo) else {
                 throw HubError.invalidRepo(repo)
             }
-            let snapshotURL = try await hubClient.downloadSnapshot(
-                of: repoID,
-                revision: revision,
-                matching: [filename],
-                progressHandler: progress
-            )
+            let snapshotURL: URL
+            do {
+                snapshotURL = try await hubClient.downloadSnapshot(
+                    of: repoID,
+                    revision: revision,
+                    matching: [filename],
+                    progressHandler: progress
+                )
+            } catch let httpError as HTTPClientError {
+                if case let .responseError(response, _) = httpError,
+                    response.statusCode == 404
+                {
+                    throw HubError.repoNotFound(repo: repo)
+                }
+                throw httpError
+            }
             let fileURL = try locateGGUF(in: snapshotURL, pattern: filename, repo: repo)
             return try LlamaModel(contentsOf: fileURL, parameters: parameters)
         }
