@@ -122,5 +122,36 @@ struct LlamaModelTests {
                 _ = try tokenizer.applyChatTemplate([["role": "user"]])
             }
         }
+
+        @Test
+        func rendersUnrecognizedTemplateViaJinja() async throws {
+            let model = try await LlamaModel.from(
+                repo: "unsloth/SmolLM2-135M-Instruct-GGUF",
+                filename: "*Q2_K.gguf",
+                parameters: .init(vocabularyOnly: true)
+            )
+
+            // Verify Jinja is in use by using a custom not-hardcoded template
+            let template = "{{ bos_token }}{% for m in messages %}<<{{ m.role }}>>{{ m.content }}<<END>>{% endfor %}{% if add_generation_prompt %}<<assistant>>{% endif %}"
+
+            let prompt = try model.tokenizer.applyChatTemplate(
+                [.system("Be brief."), .user("Hi")],
+                addGenerationPrompt: true,
+                template: template
+            )
+
+            #expect(prompt.starts(with: "<|im_start|>"))
+            #expect(prompt.contains("<<system>>Be brief.<<END>>"))
+            #expect(prompt.contains("<<user>>Hi<<END>>"))
+            #expect(prompt.contains("<<assistant>>"))
+
+            // addGenerationPrompt: false should drop the trailing `<<assistant>>`.
+            let closed = try model.tokenizer.applyChatTemplate(
+                [.user("Hi")],
+                addGenerationPrompt: false,
+                template: template
+            )
+            #expect(!closed.contains("<<assistant>>"))
+        }
     #endif
 }
