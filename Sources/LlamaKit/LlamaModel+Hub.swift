@@ -55,7 +55,7 @@
             pattern: String,
             repo: String
         ) throws -> URL {
-            let glob = NSPredicate(format: "self LIKE %@", pattern)
+            let glob = NSPredicate(format: "self LIKE[c] %@", pattern)
             let enumerator = FileManager.default.enumerator(
                 at: snapshot,
                 includingPropertiesForKeys: [.isRegularFileKey]
